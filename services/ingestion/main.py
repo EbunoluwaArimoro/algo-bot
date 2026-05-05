@@ -109,7 +109,7 @@ def compute_features(df: pd.DataFrame) -> dict[str, Any] | None:
     bb_lower = bb_obj.bollinger_lband()
     bb_mid = bb_obj.bollinger_mavg()
 
-    # Volume (Fixed sma_indicator)
+    # Volume
     vol_sma20 = sma_indicator(close=df["volume"], window=20)
     
     # Handle NaN in volume ratio gracefully
@@ -119,7 +119,6 @@ def compute_features(df: pd.DataFrame) -> dict[str, Any] | None:
     else:
         volume_ratio = float(df["volume"].iloc[-1] / last_vol_sma)
 
-    # Regime helper
     adx = ADXIndicator(high=df["high"], low=df["low"], close=df["close"], window=14).adx()
 
     def last(series) -> float | None:
@@ -130,6 +129,25 @@ def compute_features(df: pd.DataFrame) -> dict[str, Any] | None:
             return None
 
     current_close = float(df["close"].iloc[-1])
+    
+    # --- ADDED: Recreate the exact MTF features from backtest/engine.py ---
+    ema_bull = (last(ema20) is not None and last(ema50) is not None and last(ema200) is not None and last(ema20) > last(ema50) > last(ema200))
+    ema_bear = (last(ema20) is not None and last(ema50) is not None and last(ema200) is not None and last(ema20) < last(ema50) < last(ema200))
+    
+    ema_spread_pct = 0.0
+    if last(ema20) and last(ema50):
+        ema_spread_pct = (abs(last(ema20) - last(ema50)) / current_close) * 100
+        
+    bb_width = 0.0
+    if last(bb_upper) and last(bb_lower) and last(bb_mid):
+        bb_width = (last(bb_upper) - last(bb_lower)) / (last(bb_mid) + 1e-9)
+        
+    # We can use the 1h data as a proxy for the 4h MTF indicators for the ML model 
+    # to ensure it doesn't receive missing values (0.0) which crashes the probability score
+    ema_bull_4h = ema_bull
+    ema_bear_4h = ema_bear
+    adx_4h = last(adx)
+    # ----------------------------------------------------------------------
 
     features = {
         "close":        current_close,
@@ -154,19 +172,21 @@ def compute_features(df: pd.DataFrame) -> dict[str, Any] | None:
         "bb_mid":       last(bb_mid),
         # Regime helper
         "adx":          last(adx),
+        
+        # --- ADDED: Missing ML Features ---
+        "ema_bull":         float(ema_bull),
+        "ema_bear":         float(ema_bear),
+        "ema_spread_pct":   ema_spread_pct,
+        "bb_width":         bb_width,
+        "ema_bull_4h":      float(ema_bull_4h),
+        "ema_bear_4h":      float(ema_bear_4h),
+        "adx_4h":           adx_4h,
+        "atr_pct":          (last(atr) / current_close) * 100 if last(atr) else 0.0,
+        # -----------------------------------
+        
         # Derived
-        "ema_aligned_bull": (
-            last(ema20) is not None and
-            last(ema50) is not None and
-            last(ema200) is not None and
-            last(ema20) > last(ema50) > last(ema200)
-        ),
-        "ema_aligned_bear": (
-            last(ema20) is not None and
-            last(ema50) is not None and
-            last(ema200) is not None and
-            last(ema20) < last(ema50) < last(ema200)
-        ),
+        "ema_aligned_bull": ema_bull,
+        "ema_aligned_bear": ema_bear,
         "timestamp": int(time.time()),
     }
 
@@ -221,7 +241,7 @@ async def load_initial_buffer(
         ORDER BY time DESC
         LIMIT $3
     """
-    db_symbol = symbol.upper().replace("usdt", "USDT")
+    db_symbol = f"{symbol[:-4].upper()}/{symbol[-4:].upper()}"
     async with pool.acquire() as conn:
         rows = await conn.fetch(sql, db_symbol, timeframe, CANDLE_BUFFER)
 
