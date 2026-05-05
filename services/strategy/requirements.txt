@@ -1,0 +1,6 @@
+pandas==2.2.0
+numpy==1.26.4
+pandas-ta==0.3.14b        # 130+ technical indicators, one import
+redis[asyncio]==5.0.1
+asyncpg==0.29.0
+python-dotenv==1.0.0

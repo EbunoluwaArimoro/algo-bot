@@ -1,0 +1,117 @@
+version: "3.9"
+
+networks:
+  algo_net:
+    driver: bridge
+
+volumes:
+  timescale_data:
+  redis_data:
+  grafana_data:
+
+services:
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: timescaledb
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: botdb
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./infra/timescaledb/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks: [algo_net]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    networks: [algo_net]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+
+  ingestion:
+    build: ./services/ingestion
+    container_name: ingestion
+    env_file: .env
+    depends_on: [timescaledb, redis]
+    networks: [algo_net]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+
+  sweep_strategy:
+    build: ./services/sweep_strategy
+    container_name: sweep_strategy
+    env_file: .env
+    depends_on: [redis, timescaledb]
+    networks: [algo_net]
+    restart: unless-stopped
+    volumes:
+      - ./ml/models:/app/ml/models
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+
+  risk:
+    build: ./services/risk
+    container_name: risk
+    env_file: .env
+    depends_on: [redis, timescaledb]
+    networks: [algo_net]
+    restart: unless-stopped
+
+  execution:
+    build: ./services/execution
+    container_name: execution
+    env_file: .env
+    depends_on: [risk]
+    networks: [algo_net]
+    restart: unless-stopped
+
+  ml:
+    build: ./services/ml
+    container_name: ml
+    env_file: .env
+    depends_on: [timescaledb]
+    networks: [algo_net]
+    profiles: ["ml"]   # only starts when you run: docker compose --profile ml up
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4g
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana:/etc/grafana/provisioning
+    networks: [algo_net]
+    restart: unless-stoppe

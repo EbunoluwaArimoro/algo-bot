@@ -1,0 +1,4 @@
+entry_time,exit_time,symbol,direction,strategy,regime,score,entry_price,exit_price,qty,stop_loss,trail_stop,pnl,pnl_pct,exit_reason
+2023-12-14 16:00:00+00:00,2023-12-15 12:00:00+00:00,BTC/USDT,long,trend_follow,trending_bull,71.13443745110493,43171.6994,41817.4248,0.083243,41892.8319,0.0,-112.7339,-3.137,stop_loss
+2024-10-24 12:00:00+00:00,2024-10-25 16:00:00+00:00,BTC/USDT,long,trend_follow,trending_bull,65.76617181951751,67823.0822,66479.911,0.089768,66599.7906,0.0,-120.5738,-1.98,stop_loss
+2025-03-04 00:00:00+00:00,2025-03-04 16:00:00+00:00,BTC/USDT,short,trend_follow,trending_bear,65.28416818290634,83832.5493,88067.0917,0.024882,87908.8558,0.0,-105.3639,-5.051,stop_loss

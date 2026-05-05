@@ -1,0 +1,7 @@
+asyncpg==0.29.0
+redis[asyncio]==5.0.1
+xgboost>=2.0.0
+numpy>=1.26.0
+python-dotenv==1.0.0
+scikit-learn
+ta

@@ -1,0 +1,4 @@
+ccxt==4.3.22
+redis[asyncio]==5.0.1
+asyncpg==0.29.0
+python-dotenv==1.0.0
