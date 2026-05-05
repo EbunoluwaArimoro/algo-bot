@@ -2,15 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for Postgres and Math libraries
-RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev && rm -rf /var/lib/apt/lists/*
+# Install system dependencies needed for PostgreSQL (asyncpg) and machine learning libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy the requirements and install them
 COPY requirements.txt .
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
 
-# Copy your trusted code
+# Install Python dependencies WITH caching and a longer timeout to prevent network drops
+RUN pip install --default-timeout=100 -r requirements.txt
+
 COPY . .
 
+# Run the sweep strategy
 CMD ["python", "main.py"]

@@ -113,7 +113,8 @@ async def get_candle_history(
     lookback: int,
     timeframe: str = "4h",
 ) -> list[dict]:
-    db_symbol = f"{symbol[:-4].upper()}/{symbol[-4:].upper()}"
+    # Change from f"{symbol[:-4].upper()}/{symbol[-4:].upper()}" to:
+    db_symbol = symbol.upper()
     sql = """
         SELECT time, high, low, close, volume
         FROM ohlcv

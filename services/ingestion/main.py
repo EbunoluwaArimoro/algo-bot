@@ -241,16 +241,23 @@ async def load_initial_buffer(
         ORDER BY time DESC
         LIMIT $3
     """
-    db_symbol = f"{symbol[:-4].upper()}/{symbol[-4:].upper()}"
+    
+    # This ensures "solusdt" becomes "SOL/USDT"
+    clean_symbol = symbol.upper()
+    # Change from f"{symbol[:-4].upper()}/{symbol[-4:].upper()}" to:
+    db_symbol = symbol.upper()
+    
     async with pool.acquire() as conn:
         rows = await conn.fetch(sql, db_symbol, timeframe, CANDLE_BUFFER)
 
     if not rows:
+        # If this log appears, your database is either empty or the symbol/timeframe is wrong
+        log.warning("No data found in DB for %s %s. Check your 'ohlcv' table.", db_symbol, timeframe)
         return pd.DataFrame(columns=["time","open","high","low","close","volume"])
 
     df = pd.DataFrame([dict(r) for r in rows])
     df = df.sort_values("time").reset_index(drop=True)
-    log.info("Pre-loaded %d candles for %s/%s from DB", len(df), symbol, timeframe)
+    log.info("Pre-loaded %d candles for %s/%s from DB", len(df), db_symbol, timeframe)
     return df
 
 # ── WebSocket stream ──────────────────────────────────────────────────────────
@@ -262,8 +269,8 @@ def build_stream_url(symbols: list[str], timeframes: list[str]) -> str:
 def parse_kline(msg: dict) -> dict | None:
     try:
         k = msg["data"]["k"]
-        if not k["x"]:          
-            return None
+        # if not k["x"]:          
+        #     return None
         return {
             "symbol":    k["s"],               
             "timeframe": k["i"],               
@@ -278,8 +285,9 @@ def parse_kline(msg: dict) -> dict | None:
         log.warning("Kline parse error: %s | raw: %s", exc, msg)
         return None
 
-async def process_closed_candle(
+async def process_candle_update(
     candle: dict,
+    is_closed: bool,
     pool: asyncpg.Pool,
     redis: aioredis.Redis,
 ) -> None:
@@ -287,7 +295,8 @@ async def process_closed_candle(
     timeframe  = candle["timeframe"]             
     buf_key    = f"{symbol_raw}_{timeframe}"
 
-    await insert_candle(pool, candle)
+    if is_closed:
+        await insert_candle(pool, candle)
 
     new_row = pd.DataFrame([{
         "time":   candle["time"],
@@ -351,7 +360,8 @@ async def stream_loop(
 
                     candle = parse_kline(msg)
                     if candle:
-                        await process_closed_candle(candle, pool, redis)
+                        is_closed = msg["data"]["k"]["x"]
+                        await process_candle_update(candle, is_closed, pool, redis)
 
         except websockets.exceptions.ConnectionClosed as exc:
             log.warning("WebSocket closed (%s). Reconnecting in %ds…", exc, backoff)

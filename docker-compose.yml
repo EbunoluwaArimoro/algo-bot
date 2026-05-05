@@ -114,4 +114,4 @@ services:
       - grafana_data:/var/lib/grafana
       - ./infra/grafana:/etc/grafana/provisioning
     networks: [algo_net]
-    restart: unless-stoppe
+    restart: unless-stopped
